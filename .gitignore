@@ -1,0 +1,3 @@
+# Ignore specific folder
+backend/criminal law -IPC/
+backend/__pycache__

@@ -1,0 +1,17 @@
+[
+  {
+    "timestamp": "2025-04-20T20:18:04.421502",
+    "query": "hi",
+    "response": "Error: {\n  \"id\": \"nqrrenL-4yUbBN-933570c55f81dc0a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.xyz/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}"
+  },
+  {
+    "timestamp": "2025-04-20T20:18:52.363733",
+    "query": "hi",
+    "response": "Error: {\n  \"id\": \"nqrru2G-4yUbBN-933571f30e028013\",\n  \"error\": {\n    \"message\": \"Unable to access model meta-llama/Llama-3-70B-Instruct. Please visit https://api.together.ai/models to view the list of supported models.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"model_not_available\"\n  }\n}"
+  },
+  {
+    "timestamp": "2025-04-20T20:20:10.231969",
+    "query": "hi",
+    "response": "Error: {\n  \"id\": \"nqrsJBL-4yUbBN-933573d84a877f89\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.xyz/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}"
+  }
+]

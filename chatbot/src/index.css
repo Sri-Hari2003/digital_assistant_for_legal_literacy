@@ -11,3 +11,17 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+/* Hide scrollbars visually but allow scrolling */
+*::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;  /* For Internet Explorer and Edge */
+  scrollbar-width: none;     /* For Firefox */
+}
+
+/* Optional: Adding a smoother scrolling experience */
+html {
+  scroll-behavior: smooth;
+}

@@ -4,6 +4,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 import requests
 import os
+from Tagger import tagger , search_and_load_json
+from caseSummarizer import summarizer, chunk_text
+# from relevantCases import Case_search
 
 app = Flask(__name__)
 CORS(app)
@@ -18,7 +21,7 @@ faiss_db = FAISS.load_local(
 print("✅ FAISS Index Loaded Successfully!")
 
 # ✅ Load API Key (Either Hardcoded or from Environment)
-API_KEY = os.getenv("TOGETHER_AI_KEY", "")  # Change the second argument to your actual key
+API_KEY = os.getenv("TOGETHER_AI_KEY", "37d7a04f4f855143791edb2733d20b461f460c8a50ce75407210d049db58649e")  # Change the second argument to your actual key
 
 # ✅ FAISS Search Function
 def search_ipc(query: str, top_k: int = 3):
@@ -44,9 +47,9 @@ def query_together_ai(query: str, ipc_text: str):
         "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
         "messages": [
             {"role": "system", "content": "You are a legal assistant providing answers based on the Indian Penal Code (IPC)."},
-            {"role": "user", "content": f"Here is relevant IPC information:\n{ipc_text}\n\nNow answer the user's query: {query}"}
+            {"role": "user", "content": f"Here is some IPC context:\n{ipc_text}\n\nNow answer the user's query: {query}"}
         ],
-        "max_tokens": 200,
+        "max_tokens": 1000,
         "temperature": 0.7
     }
 
@@ -79,6 +82,47 @@ def chat():
         "ipc_sections": ipc_text,
         "response": ai_response
     })
+
+@app.route("/get_case", methods=["POST"])
+def get_case():
+    data = request.json
+    user_query = data.get("query", "")
+
+    if not user_query:
+        return jsonify({"error": "Query is required"}), 400
+
+    # Step 1: Get tags using your tagger function
+    tags = tagger(user_query)
+
+    # Step 2: Search and fetch matching JSON files
+    root_folder = r"C:\Users\S Sri Hari\Major_project\final\frontend\chatbot-ui\backend\criminal law -IPC"
+    result = search_and_load_json(tags, root_folder)
+
+    return jsonify({
+        "query": user_query,
+        "tags": tags,
+        "results": result
+    })
+
+@app.route("/summarize", methods=["POST"])
+def summarize():
+    try:
+        data = request.get_json(force=True)  # <- force parsing JSON
+    except Exception as e:
+        return jsonify({"error": f"Failed to parse JSON: {str(e)}"}), 400
+
+    auth = request.headers.get("Authorization")
+
+    if not auth or not auth.startswith("hf_"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    inputs = data.get("inputs")
+    if not inputs:
+        return jsonify({"error": "Missing 'inputs' field"}), 400
+
+    final_summary = summarizer(inputs)  # <- use your wrapper
+    return jsonify({"summary": final_summary})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
