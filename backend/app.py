@@ -4,9 +4,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 import requests
 import os
-from Tagger import tagger , search_and_load_json
+import json
+from Tagger import tagger, search_and_load_json
 from caseSummarizer import summarizer, chunk_text
-# from relevantCases import Case_search
 
 app = Flask(__name__)
 CORS(app)
@@ -20,10 +20,33 @@ faiss_db = FAISS.load_local(
 )
 print("✅ FAISS Index Loaded Successfully!")
 
-# ✅ Load API Key (Either Hardcoded or from Environment)
-API_KEY = os.getenv("TOGETHER_AI_KEY", "37d7a04f4f855143791edb2733d20b461f460c8a50ce75407210d049db58649e")  # Change the second argument to your actual key
+# ✅ Load API Key
+API_KEY = os.getenv("TOGETHER_AI_KEY", "37d7a04f4f855143791edb2733d20b461f460c8a50ce75407210d049db58649e")
 
-# ✅ FAISS Search Function
+# ✅ Memory Handling
+MEMORY_FILE = "backend/memory.json"
+
+def load_memory():
+    if os.path.exists(MEMORY_FILE):
+        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def save_memory(memory):
+    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(memory, f, ensure_ascii=False, indent=2)
+
+def append_to_memory(user_query, ipc_text, ai_response):
+    memory = load_memory()
+    memory.append({
+        "user": user_query,
+        "ipc": ipc_text,
+        "response": ai_response
+    })
+    save_memory(memory)
+    return memory[-6:]  # Latest 6 entries for context
+
+# ✅ FAISS Search
 def search_ipc(query: str, top_k: int = 3):
     results = faiss_db.as_retriever(search_type="similarity", search_kwargs={"k": top_k}).get_relevant_documents(query)
     
@@ -41,14 +64,22 @@ def search_ipc(query: str, top_k: int = 3):
 
     return formatted_output.strip()
 
-# ✅ Function to Query Together AI
-def query_together_ai(query: str, ipc_text: str):
+# ✅ Together AI Query Function
+def query_together_ai(query: str, ipc_text: str, memory_context: list):
+    messages = [{"role": "system", "content": "You are a legal assistant providing answers based on the Indian Penal Code (IPC)."}]
+
+    for entry in memory_context:
+        messages.append({"role": "user", "content": entry["user"]})
+        messages.append({"role": "assistant", "content": entry["response"]})
+
+    messages.append({
+        "role": "user",
+        "content": f"Here is some IPC context:\n{ipc_text}\n\nNow answer the user's query: {query}"
+    })
+
     payload = {
         "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        "messages": [
-            {"role": "system", "content": "You are a legal assistant providing answers based on the Indian Penal Code (IPC)."},
-            {"role": "user", "content": f"Here is some IPC context:\n{ipc_text}\n\nNow answer the user's query: {query}"}
-        ],
+        "messages": messages,
         "max_tokens": 1000,
         "temperature": 0.7
     }
@@ -65,7 +96,7 @@ def query_together_ai(query: str, ipc_text: str):
     else:
         return f"Error: {response.text}"
 
-# ✅ Flask API Endpoint (DOES NOT Expect API Key)
+# ✅ Chat Endpoint
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
@@ -75,7 +106,19 @@ def chat():
         return jsonify({"error": "Query is required"}), 400
 
     ipc_text = search_ipc(user_query)
-    ai_response = query_together_ai(user_query, ipc_text)
+
+    # Append to memory with placeholder response first
+    memory = load_memory()
+    memory.append({"user": user_query, "ipc": ipc_text, "response": ""})
+    save_memory(memory)
+
+    memory_context = memory[-6:-1]  # Get last 5 previous messages for context
+
+    ai_response = query_together_ai(user_query, ipc_text, memory_context)
+
+    # Update the last memory entry with actual response
+    memory[-1]["response"] = ai_response
+    save_memory(memory)
 
     return jsonify({
         "query": user_query,
@@ -83,6 +126,7 @@ def chat():
         "response": ai_response
     })
 
+# ✅ Tagging & Case Search
 @app.route("/get_case", methods=["POST"])
 def get_case():
     data = request.json
@@ -91,10 +135,8 @@ def get_case():
     if not user_query:
         return jsonify({"error": "Query is required"}), 400
 
-    # Step 1: Get tags using your tagger function
     tags = tagger(user_query)
 
-    # Step 2: Search and fetch matching JSON files
     root_folder = r"C:\Users\S Sri Hari\Major_project\final\frontend\chatbot-ui\backend\criminal law -IPC"
     result = search_and_load_json(tags, root_folder)
 
@@ -104,10 +146,11 @@ def get_case():
         "results": result
     })
 
+# ✅ Case Summarization
 @app.route("/summarize", methods=["POST"])
 def summarize():
     try:
-        data = request.get_json(force=True)  # <- force parsing JSON
+        data = request.get_json(force=True)
     except Exception as e:
         return jsonify({"error": f"Failed to parse JSON: {str(e)}"}), 400
 
@@ -120,9 +163,9 @@ def summarize():
     if not inputs:
         return jsonify({"error": "Missing 'inputs' field"}), 400
 
-    final_summary = summarizer(inputs)  # <- use your wrapper
+    final_summary = summarizer(inputs)
     return jsonify({"summary": final_summary})
 
-
+# ✅ Run Server
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
